@@ -10,13 +10,21 @@ class Dense:
         self.W = 0.01 * np.random.randn(n_neurons, n_inputs)
         self.b = np.zeros(n_neurons)
 
+        # day 5
+        # momentum "velocity" terms — same shape as weights/biases, start at zero
+        self.vW = np.zeros_like(self.W)
+        self.vb = np.zeros_like(self.b) 
+        
+
     def forward(self,x):
 
         self.x = x
         self.z = np.dot(self.W,x) + self.b
         return self.z
 
-    def backward(self, delta, learning_rate):
+    
+
+    def backward(self, delta, learning_rate, beta = 0.9):
         '''
         delta: the error term (dL/dz) for THIS layer, already computed
         Returns: dL/dx, the error to pass to the PREVIOUS layer
@@ -25,9 +33,18 @@ class Dense:
         db = delta                        # dL/db = delta
         dx = np.dot(self.W.T, delta)       # dL/dx = W^T · delta, passed backward
 
+
+        # Day 5: Momentum update
+        # momentum update: blend new gradient with past velocity
+
+        self.vW = beta * self.vW + (1 - beta) * dW
+        self.vb = beta * self.vb + (1 - beta) * db
+
+        
+
         # Update weights and biases of this layer
-        self.W -= learning_rate * dW
-        self.b -= learning_rate * db
+        self.W -= learning_rate * self.vW
+        self.b -= learning_rate * self.vb
 
         return dx
     
