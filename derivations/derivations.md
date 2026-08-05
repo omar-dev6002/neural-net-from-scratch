@@ -69,3 +69,31 @@ regions of the loss surface:
 
 velocity = β · velocity + (1 - β) · gradient
 W = W - learning_rate · velocity
+
+
+## Day 6: Data pipeline — returns, realized volatility, feature engineering
+
+![Day 6 notes](day6_p1.jpg)
+
+**Problem framing:** predicting realized volatility (a measure of how much
+a stock's price swings) is a **regression problem** — the output is a
+continuous number, not a class label.
+
+**Key pandas operations used:**
+
+1. **`pct_change()`** — computes daily return:
+   `(today's price - yesterday's price) / yesterday's price`
+
+2. **`.rolling(window=21).std()`** — looks at the last 21 days of returns
+   and computes their standard deviation. This is "realized volatility" —
+   it captures how much the price has been swinging recently, regardless
+   of direction.
+
+3. **`dropna()`** — the first 21 rows have `NaN` for volatility, since
+   there isn't enough history yet to compute a full 21-day window.
+   `dropna()` removes these incomplete rows.
+
+**Feature engineering (avoiding lookahead bias):** features use *lagged*
+(yesterday's) values only — `Return_lag1`, `Return_lag2`,
+`Volatility_lag1` — since on any given day you only know yesterday's
+completed data, not today's, when trying to forecast today's volatility.
