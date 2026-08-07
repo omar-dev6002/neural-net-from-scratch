@@ -3,7 +3,8 @@ import pandas as pd
 from network import NeuralNetwork
 from activations import relu, sigmoid 
 from losses import mse, mse_derivative 
-
+from sklearn.neural_network import MLPRegressor
+import matplotlib.pyplot as plt
 
 
 # --- Load the processed dataset ---
@@ -132,7 +133,41 @@ print(f"Naive Baseline Loss (predict using yesterday's volatility): {naive_loss:
 
 
 
+# --- Sanity check against sklearn's MLPRegressor ---
+
+
+sklearn_model = MLPRegressor(
+    hidden_layer_sizes = (8,),
+    activation = 'relu',
+    max_iter = 1000,
+    random_state = 42  
+)
+
+sklearn_model.fit(X_train_norm, y_train_norm)
+sklearn_preds = sklearn_model.predict(X_test_norm)
+sklearn_test_loss = np.mean((sklearn_preds - y_test_norm) ** 2)
+
+
+
+print(f"\n---- Comparision ----")
+print(f"Your from - scratch NN Test Loss :   {test_loss:.6f}")
+print(f"sklearn MLPRegressor Test Loss :     {sklearn_test_loss:.6f}")
+print(f"Naive Baseline Test Loss :           {naive_loss:.6f}")
+
 
         
+# --- Visualize predictions vs actual volatility ---
+# Convert predictions back to actual predictions list (already have `predictions` from earlier)
 
 
+plt.figure(figsize=(12,5))
+plt.plot(y_test_norm, label = 'Actual Volatility (normalized)', color = 'black', linewidth = 1.5)
+plt.plot(predictions, label = 'Predictied Volatility (My NN)', color = 'orange', linewidth = 1.5, alpha = 0.8)
+plt.title('Nifty 50 realized Volatility: Predictied vs actual (Test set)')
+plt.xlabel('Days (Test period)')
+plt.ylabel('Volatility (normalized 0 - 1)')
+plt.legend
+plt.tight_layout()
+plt.savefig('../notebooks/volatiltiy_predictions.png', dpi = 150)
+plt.show()
+print("\nSaved plot to notebooks/volatility_predictions.png")
