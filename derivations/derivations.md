@@ -97,3 +97,61 @@ continuous number, not a class label.
 (yesterday's) values only — `Return_lag1`, `Return_lag2`,
 `Volatility_lag1` — since on any given day you only know yesterday's
 completed data, not today's, when trying to forecast today's volatility.
+
+
+## Day 7: Training on real Nifty 50 data — normalization & chronological split
+
+![Day 7 notes](day7_p1.jpg)
+
+**Why normalize before training:** volatility values are tiny (~0.006-0.007)
+while returns can be slightly positive or negative (~±0.01). Neural nets
+based on sigmoid/tanh activations struggle when inputs are on very
+different scales or very small — gradients can vanish or updates can
+become unstable. Fix: standardize each feature (subtract mean, divide by
+standard deviation) so everything is roughly on the same scale
+(mean 0, std 1).
+
+**Why the train/test split must be chronological:** time-series data must
+never be shuffled before splitting. Shuffling lets the model effectively
+"see" future data during training and get evaluated on the past — a form
+of lookahead bias in the split itself. The fix: split by time — train on
+the earlier portion, test strictly on the later portion.
+
+
+
+## Day 8: Validating against sklearn, honest result analysis
+
+![Day 8 notes](day8_p1.jpg)
+![Day 8 notes](day8_p2.jpg)
+
+**Sanity check:** compared the from-scratch network against
+`sklearn.MLPRegressor` on the same normalized Nifty 50 data.
+
+**Result:** the from-scratch NN scored a test loss of `0.000777`, roughly
+8x better than sklearn's `0.006189`. Initially this looked like a strong
+result, but on inspection it isn't a fair comparison — the two models
+used very different training setups:
+
+| | From-scratch NN | sklearn MLPRegressor (defaults) |
+|---|---|---|
+| Optimizer | SGD + momentum (β=0.9) | Adam |
+| Learning rate | 0.01 (fixed) | 0.001 (adaptive) |
+| Batch size | 1 (per-example) | 200 (default) |
+| Early stopping | Yes, best-weight restore | No (ran full 1000 iterations) |
+| Output activation | Sigmoid (bounded 0-1) | Identity (unbounded) |
+
+Since my network was hand-tuned (learning rate adjusted after an overflow
+bug, early stopping added) while sklearn ran on untouched defaults, the
+comparison favors my model unfairly. The honest conclusion is that this
+comparison is not fully controlled, not that hand-rolled SGD beats Adam.
+
+**A more interesting, genuine finding:** plotting predictions vs actual
+volatility shows the network tracks volatility *spikes* well, but
+systematically *overestimates* during calm periods (e.g. actual ~0.03-0.05
+vs predicted ~0.07-0.08 between test days 100-250). Likely cause: the
+training data contains more "spike-adjacent" volatility than truly flat,
+ultra-calm stretches, so the network learned to predict something close
+to a recent average — which tracks spikes reasonably but overshoots
+genuinely quiet periods.
+
+![Predicted vs actual volatility](../notebooks/volatility_predictions.png)
