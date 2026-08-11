@@ -28,18 +28,21 @@ data['Return'] = data['Close'].pct_change() # pct_change() computes (today's pri
 
 data['Volatility'] = data['Return'].rolling(window = 21).std()  # .rolling(window=21).std() looks at the last 21 days of returns and computes their standard deviation
 
+
+# --- Additional feature: longer-window volatility average (captures regime, not just yesterday's value) ---
+data['Volatility_ma10'] = data['Volatility'].rolling(window=10).mean()
+
 # Drop rows with NaN (from pct_change and rolling window warm-up)
 data_clean = data.dropna()
 
 print("\nWith returns and volatility:")
 
-print(data_clean[['Close', 'Return', 'Volatility']].head(10))
+print(data_clean[['Close', 'Return', 'Volatility', 'Volatility_ma10']].head(10))
 
 print(f"\nRows after cleaning: {len(data_clean)}")
 
 
 # Save processed version
-
 data_clean.to_csv("../data/nifty50_processed.csv")
 print("\nSaved to data/nifty50_processed.csv")
 
@@ -50,14 +53,26 @@ print("\nSaved to data/nifty50_processed.csv")
 data_clean['Return_lag1'] = data_clean['Return'].shift(1) # yesterday's return
 data_clean['Return_lag2'] = data_clean['Return'].shift(2) # day before yesterday's return
 data_clean['Volatility_lag1'] = data_clean['Volatility'].shift(1) # yesterday's volatility 
+data_clean['Volatility_ma10_lag1'] = data_clean['Volatility_ma10'].shift(1)
+
 
 # Target: TODAY's volatility (what I am predicting), using YESTERDAY's info as features
 # so I shift features forward by 1, meaning "yesterday's known data predicts today's volatility"
 
-features = ['Return_lag1', 'Return_lag2', 'Volatility_lag1']
+features = ['Return_lag1', 'Return_lag2', 'Volatility_lag1','Volatility_ma10_lag1']
 target = 'Volatility'
 
 model_data = data_clean[features + [target]].dropna() # drop rows with NaN from lagging
+
+
+
+data_clean['Volatility_ma10_lag1'] = data_clean['Volatility_ma10'].shift(1)       # s 
+
+
+features = ['Return_lag1', 'Return_lag2', 'Volatility_lag1', 'Volatility_ma10_lag1']
+target = 'Volatility'
+
+model_data = data_clean[features + [target]].dropna()
 
 
 print("\nFinal feature/terget dataset:")

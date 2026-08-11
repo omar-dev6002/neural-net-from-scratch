@@ -166,8 +166,8 @@ plt.plot(predictions, label = 'Predictied Volatility (My NN)', color = 'orange',
 plt.title('Nifty 50 realized Volatility: Predictied vs actual (Test set)')
 plt.xlabel('Days (Test period)')
 plt.ylabel('Volatility (normalized 0 - 1)')
-plt.legend
+plt.legend()
 plt.tight_layout()
-plt.savefig('../notebooks/volatiltiy_predictions.png', dpi = 150)
+plt.savefig('../notebooks/volatility_predictions.png', dpi = 150)
 plt.show()
 print("\nSaved plot to notebooks/volatility_predictions.png")

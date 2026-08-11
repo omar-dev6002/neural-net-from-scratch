@@ -155,3 +155,40 @@ to a recent average — which tracks spikes reasonably but overshoots
 genuinely quiet periods.
 
 ![Predicted vs actual volatility](../notebooks/volatility_predictions.png)
+
+
+## Day 9: Attempting to fix calm-period overestimation — a negative result
+
+**Hypothesis:** the model overestimates volatility during calm periods
+because it only sees yesterday's single volatility value, which doesn't
+capture whether calm has persisted. Adding a longer-window feature
+(`Volatility_ma10_lag1`, a 10-day rolling average of volatility, lagged
+by 1) should give the network "regime" information and reduce this bias.
+
+**Result: the hypothesis was not supported.**
+
+| | 3 features (Day 7-8) | 4 features (+ MA10) |
+|---|---|---|
+| Test Loss | 0.000777 | 0.001255 |
+
+Adding the feature made test performance *worse*. More strikingly, the
+prediction plot showed the model producing a **perfectly flat prediction**
+(~0.085) across the entire calm-period stretch (test days ~100-250) —
+not just biased, but constant regardless of the actual input values.
+
+**Diagnosis: dying ReLU.** A flat output across a wide input range is a
+classic signature of one or more ReLU neurons being permanently "dead"
+(outputting 0) for that entire input region — when a neuron's
+pre-activation is negative for a whole range of inputs, it contributes
+nothing, and the network effectively collapses to a simpler function
+there. Adding the 4th feature likely shifted the weight landscape enough
+to push hidden neurons into this dead zone specifically for calm-period
+inputs.
+
+**Decision:** reverted to the 3-feature model (`Return_lag1`,
+`Return_lag2`, `Volatility_lag1`) as the final version, since it
+outperforms the 4-feature version and doesn't exhibit dead-neuron
+behavior. A natural next step (not pursued here, in the interest of
+time) would be trying Leaky ReLU or reinitializing weights to test
+whether the dying-neuron problem — rather than the feature itself — was
+the actual cause of the regression.
