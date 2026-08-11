@@ -36,7 +36,7 @@ class NeuralNetwork:
              self.a_values.append(x) # Store activated output for backward pass
         return x
     
-    def backward(self, y_true, learning_rate):
+    def backward(self, y_true, learning_rate, l2_lambda = 0.0):
             """
                y_true: true labels, shape (n_outputs,)
                learning_rate: learning rate for weight updates
@@ -49,7 +49,7 @@ class NeuralNetwork:
 
             # walk backward through layers
             for i in reversed(range(len(self.layers))):
-                 delta_prev = self.layers[i].backward(delta, learning_rate)
+                 delta_prev = self.layers[i].backward(delta, learning_rate, l2_lambda = l2_lambda)
                  if i > 0:
                       a_prev = self.a_values[i]  # activated output feeding into this layer
                       delta = delta_prev * sigmoid_derivative(a_prev)

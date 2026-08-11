@@ -192,3 +192,35 @@ behavior. A natural next step (not pursued here, in the interest of
 time) would be trying Leaky ReLU or reinitializing weights to test
 whether the dying-neuron problem — rather than the feature itself — was
 the actual cause of the regression.
+
+
+## Day 10: L2 regularization — implemented, tested, found limited benefit
+
+![Day 10 notes](day10_p1.jpeg)
+![Day 10 notes](day10_p2.jpeg)
+
+Added manual L2 regularization to `Dense.backward()`: the gradient update
+becomes `dW += 2 * λ * W`, penalizing large weights to discourage
+overfitting.
+
+**Result across tested λ values:**
+
+| λ | Test Loss | Effect |
+|---|---|---|
+| 0 (no L2, baseline) | 0.000777 | — |
+| 0.001 | 0.004884 | Far worse — network under-fit, predictions collapsed to a near-flat line across the entire test period (weights pushed toward zero faster than the error signal could grow them) |
+| 0.00001 | 0.000810 | Essentially no effect — too weak to change training dynamics |
+
+**Conclusion:** L2 regularization did not improve this model in the range
+tested. A plausible explanation: early stopping (added Day 7) already
+provides implicit regularization by halting training at the best-ever
+checkpoint, so L2's marginal benefit here may be small.
+
+**A broader observation connecting back to Day 9:** flat, near-constant
+predictions can arise from multiple distinct causes — Day 9's dying ReLU
+(dead neurons outputting zero for a range of inputs) and Day 10's
+over-regularization (weights pushed toward zero faster than they could
+learn) both produce visually similar flat-line symptoms, but for
+different underlying reasons. Diagnosing *why* a model outputs a flat
+prediction requires examining the actual mechanism, not just observing
+the symptom.

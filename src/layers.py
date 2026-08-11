@@ -24,14 +24,21 @@ class Dense:
 
     
 
-    def backward(self, delta, learning_rate, beta = 0.9):
+    def backward(self, delta, learning_rate, beta = 0.9, l2_lambda = 0.0):           # l2_lambda=0.0 default means regularization is "off" unless you explicitly turn it on
         '''
         delta: the error term (dL/dz) for THIS layer, already computed
+        l2_lambda: L2 regularization strength (0.0 = no regularization)
         Returns: dL/dx, the error to pass to the PREVIOUS layer
         '''
+        
         dW = np.outer(delta, self.x)      # dL/dW = delta · x^T
         db = delta                        # dL/db = delta
         dx = np.dot(self.W.T, delta)       # dL/dx = W^T · delta, passed backward
+
+
+        # L2 regularization: add penalty gradient (2 * lambda * W) to discourage large weights
+
+        dW += 2 * l2_lambda * self.W
 
 
         # Day 5: Momentum update

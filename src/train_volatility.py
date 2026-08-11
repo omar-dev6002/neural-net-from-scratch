@@ -63,6 +63,7 @@ net = NeuralNetwork(layer_sizes = [3, 8, 1], activations =[relu, sigmoid])
 epochs = 200    # the number of times the entire training dataset is passed through the network
 learning_rate = 0.01
 batch_size = 32
+l2_lambda = 0.00001      # L2 regularization strength — small penalty on large weights
 
 n_samples = len(X_train_norm)
 
@@ -86,7 +87,7 @@ for epoch in range(epochs):
         y_true = np.array([y_shuffled[i]])
         y_pred = net.forward(x)
         total_loss += mse(y_pred, y_true)
-        net.backward(y_true, learning_rate)
+        net.backward(y_true, learning_rate, l2_lambda= l2_lambda)
 
     avg_loss = total_loss / n_samples
 
