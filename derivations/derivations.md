@@ -224,3 +224,41 @@ learn) both produce visually similar flat-line symptoms, but for
 different underlying reasons. Diagnosing *why* a model outputs a flat
 prediction requires examining the actual mechanism, not just observing
 the symptom.
+
+
+
+
+## Day 11: Leaky ReLU — closing the loop on Day 9's dying ReLU finding
+
+![Day 11 notes](day11_p1.jpeg)
+![Day 11 notes](day11_p2.jpeg)
+
+**Hypothesis (revisited):** Day 9's negative result may have been caused
+by the *activation function* dying, not by the feature itself being
+unhelpful. Leaky ReLU allows a small negative slope (`α = 0.01`) instead
+of a hard zero, so neurons can't get permanently stuck.
+
+**Implementation change:** generalized `NeuralNetwork` to store
+pre-activation `z` values (not just activated `a` values) and to look up
+the correct derivative function per layer via a `DERIVATIVES` dict,
+rather than hardcoding `sigmoid_derivative` everywhere. This was
+necessary because Leaky ReLU's derivative depends on the sign of `z`,
+which isn't recoverable from the activated value `a` alone.
+
+**Result — hypothesis confirmed:**
+
+| Model | Test Loss |
+|---|---|
+| 3 features, ReLU | 0.000777 |
+| 4 features, ReLU (Day 9) | 0.001255 — worse |
+| 4 features, Leaky ReLU (Day 11) | **0.000177 — best result** |
+
+The original Day 9 hypothesis (longer-window volatility improves
+forecasts) was correct — it was masked by dying ReLU, not disproven by
+the feature itself. Switching to Leaky ReLU fixed the dead-neuron issue
+and revealed the true benefit: **~4.4x improvement over the previous
+best model**, and ~1950x better than the naive baseline.
+
+This is now the final model configuration: 4 features
+(`Return_lag1`, `Return_lag2`, `Volatility_lag1`, `Volatility_ma10_lag1`),
+architecture `[4, 8, 1]` with `[leaky_relu, sigmoid]` activations.
