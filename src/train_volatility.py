@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from network import NeuralNetwork
-from activations import relu, sigmoid 
+from activations import relu, sigmoid, leaky_relu
 from losses import mse, mse_derivative 
 from sklearn.neural_network import MLPRegressor
 import matplotlib.pyplot as plt
@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 data = pd.read_csv("../data/nifty50_model_data.csv", index_col = 0)
 data = data.dropna()   # remove leftover header artifact rows from the MultiIndex CSV export
 
-features = ['Return_lag1', 'Return_lag2', 'Volatility_lag1']
+features = ['Return_lag1', 'Return_lag2', 'Volatility_lag1', 'Volatility_ma10_lag1']
 
 target = 'Volatility' 
 
@@ -56,14 +56,14 @@ print(f"\nNaN count per column:\n{data.isna().sum()}")
 np.random.seed(42)
 
 
-net = NeuralNetwork(layer_sizes = [3, 8, 1], activations =[relu, sigmoid])
-# 3 inputs -> 8 hidden neurons (ReLU) -> 1 output (sigmoid, since i will rescale later)
+net = NeuralNetwork(layer_sizes = [4, 8, 1], activations =[leaky_relu, sigmoid])
+# 4 inputs -> 8 hidden neurons (leaky_ReLU) -> 1 output (sigmoid, since i will rescale later)
 
 
 epochs = 200    # the number of times the entire training dataset is passed through the network
 learning_rate = 0.01
 batch_size = 32
-l2_lambda = 0.00001      # L2 regularization strength — small penalty on large weights
+l2_lambda = 0.0      # L2 regularization strength — small penalty on large weights
 
 n_samples = len(X_train_norm)
 

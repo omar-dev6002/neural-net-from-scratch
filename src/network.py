@@ -1,6 +1,17 @@
 import numpy as np
 from layers import Dense
-from activations import relu, sigmoid, softmax, sigmoid_derivative
+from activations import relu, sigmoid, softmax, leaky_relu
+from activations import sigmoid_derivative, relu_derivative, leaky_relu_derivative
+
+
+# Mapping each activation function to its matching derivative function
+DERIVATIVES = {
+     sigmoid : sigmoid_derivative,
+     relu : relu_derivative,
+     leaky_relu : leaky_relu_derivative
+}
+
+
 
 class NeuralNetwork:
     '''
@@ -29,10 +40,13 @@ class NeuralNetwork:
             x: input data, shape (n_features,)
             returns: output of the network after forward pass
         """
-        self.a_values = [x]  # Store activations for backward pass
+
+        self.z_values = []   # pre - activation value(needed for derivatives)
+        self.a_values = [x]  # Store activations for backward pass, activated outputs, needed for weight gradients 
         for layer , activation in zip(self.layers, self.activations):
              z = layer.forward(x)
              x = activation(z)
+             self.z_values.append(z)
              self.a_values.append(x) # Store activated output for backward pass
         return x
     
@@ -43,16 +57,21 @@ class NeuralNetwork:
             """
 
             y_pred = self.a_values[-1]   # Get the last activation (output of the network)
-
-            # start the chain: error at the output layer
-            delta = (y_pred - y_true) * sigmoid_derivative(y_pred)
+            output_activation = self.activations[-1]
+            output_derivative = DERIVATIVES[output_activation]
+            
+            # start the chain: error at the output layer, using z (not a!)
+            delta = (y_pred - y_true) * output_derivative(self.z_values[-1])
 
             # walk backward through layers
             for i in reversed(range(len(self.layers))):
                  delta_prev = self.layers[i].backward(delta, learning_rate, l2_lambda = l2_lambda)
                  if i > 0:
-                      a_prev = self.a_values[i]  # activated output feeding into this layer
-                      delta = delta_prev * sigmoid_derivative(a_prev)
+                      hidden_activation = self.activations[i - 1]
+                      hidden_derivative = DERIVATIVES[hidden_activation]
+                      delta = delta_prev * hidden_derivative(self.z_values[i - 1])
+
+                      
 
 
 
