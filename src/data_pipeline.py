@@ -66,15 +66,6 @@ model_data = data_clean[features + [target]].dropna() # drop rows with NaN from 
 
 
 
-data_clean['Volatility_ma10_lag1'] = data_clean['Volatility_ma10'].shift(1)       # s 
-
-
-features = ['Return_lag1', 'Return_lag2', 'Volatility_lag1', 'Volatility_ma10_lag1']
-target = 'Volatility'
-
-model_data = data_clean[features + [target]].dropna()
-
-
 print("\nFinal feature/terget dataset:")
 
 print(model_data.head(10))  # first 10 rows of the final dataset

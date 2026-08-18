@@ -17,7 +17,7 @@ target = 'Volatility'
 
 
 
-X = data[features].values  # shape(n_samples, 3)
+X = data[features].values  # shape(n_samples, 4)
 y = data[target].values    # shape(n_samples, )
 
 # --- Chronological train/test split (80/20, NO shuffling) ---
@@ -32,7 +32,6 @@ print(f"Train Samples: {len(X_train)}, Test Samples: {len(X_test)}")
 # --- Normalize using TRAIN stats only (never leak test stats into training) ---
 
 X_mean, X_std =  X_train.mean(axis=0), X_train.std(axis=0)
-y_mean, y_std =  y_train.mean(axis=0), y_train.std(axis=0)
 
 X_train_norm = (X_train - X_mean) / X_std
 X_test_norm = (X_test - X_mean) / X_std
@@ -73,7 +72,7 @@ n_samples = len(X_train_norm)
 best_loss = float('inf')
 best_weights = None
 patience = 30
-epochs_witout_improvement = 0
+epochs_without_improvement = 0
 
 for epoch in range(epochs):
     total_loss = 0
