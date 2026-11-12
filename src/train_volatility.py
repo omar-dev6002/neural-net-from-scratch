@@ -1,9 +1,10 @@
 import numpy as np
 import pandas as pd
 from network import NeuralNetwork
-from activations import relu, sigmoid, leaky_relu
-from losses import mse, mse_derivative 
-from sklearn.neural_network import MLPRegressor
+from activations import sigmoid, leaky_relu
+from losses import mse
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 
@@ -19,34 +20,33 @@ target = 'Volatility'
 X = data[features].values  # shape(n_samples, 4)
 y = data[target].values    # shape(n_samples, )
 
-# --- Chronological train/test split (80/20, NO shuffling) ---
+# --- Chronological train/val/test split (70/10/20, NO shuffling) ---
 
-split_idx = int(len(X) * 0.8)   # split index for 80% train and 20% test
+n = len(X)
+train_end = int(n * 0.7)
+val_end = int(n * 0.8)
 
-X_train, X_test = X[:split_idx], X[split_idx:]
-y_train, y_test = y[:split_idx], y[split_idx:]
+X_train, X_val, X_test = X[:train_end], X[train_end:val_end], X[val_end:]
+y_train, y_val, y_test = y[:train_end], y[train_end:val_end], y[val_end:]
 
-print(f"Train Samples: {len(X_train)}, Test Samples: {len(X_test)}")
+print(f"Train: {len(X_train)}, Val: {len(X_val)}, Test: {len(X_test)}")
 
 # --- Normalize using TRAIN stats only (never leak test stats into training) ---
 
 X_mean, X_std =  X_train.mean(axis=0), X_train.std(axis=0)
 
 X_train_norm = (X_train - X_mean) / X_std
+X_val_norm = (X_val - X_mean) / X_std
 X_test_norm = (X_test - X_mean) / X_std
 
 y_min, y_max = y_train.min(), y_train.max()
 y_train_norm = (y_train - y_min) / (y_max - y_min)
+y_val_norm = (y_val - y_min) / (y_max - y_min)
 y_test_norm = (y_test - y_min) / (y_max - y_min)
 
 
 print(f"X_train_norm mean/std:{X_train_norm.mean():.4f}, {X_train_norm.std():.4f} ")
 print(f"y_train_norm mean/std:{y_train_norm.mean():.4f}, {y_train_norm.std():.4f} ")
-
-
-print(data.head())
-print(data.dtypes)
-print(f"\nNaN count per column:\n{data.isna().sum()}")
 
 
 
@@ -60,15 +60,14 @@ net = NeuralNetwork(layer_sizes = [4, 8, 1], activations =[leaky_relu, sigmoid])
 
 epochs = 200    # the number of times the entire training dataset is passed through the network
 learning_rate = 0.01
-batch_size = 32
 l2_lambda = 0.0      # L2 regularization strength — small penalty on large weights
 
 n_samples = len(X_train_norm)
 
 
-# --- Train with early stopping (keep best weights) ---
+# --- Train with early stopping on VALIDATION loss (keep best weights) ---
 
-best_loss = float('inf')
+best_val_loss = float('inf')
 best_weights = None
 patience = 30
 epochs_without_improvement = 0
@@ -89,17 +88,24 @@ for epoch in range(epochs):
 
     avg_loss = total_loss / n_samples
 
-    if avg_loss < best_loss :
-        best_loss = avg_loss
+    # compute validation loss for early stopping
+    val_loss = 0.0
+    for i in range(len(X_val_norm)):
+        y_pred = net.forward(X_val_norm[i])
+        val_loss += mse(y_pred, np.array([y_val_norm[i]]))
+    val_loss /= len(X_val_norm)
+
+    if val_loss < best_val_loss:
+        best_val_loss = val_loss
         best_weights = [(layer.W.copy(), layer.b.copy()) for layer in net.layers]
-        epochs_witout_improvement = 0
+        epochs_without_improvement = 0
     else:
-        epochs_witout_improvement += 1
+        epochs_without_improvement += 1
 
     if epoch % 20 == 0:
-        print(f"Epoch : {epoch}, Train Loss: {avg_loss:.6f} (best: {best_loss:.6f})")
+        print(f"Epoch : {epoch}, Train Loss: {avg_loss:.6f}, Val Loss: {val_loss:.6f} (best: {best_val_loss:.6f})")
 
-    if epochs_witout_improvement >= patience:
+    if epochs_without_improvement >= patience:
         print(f"\n early stopping at epoch {epoch} - no improvement for {patience} epochs")
         break
 
@@ -110,7 +116,7 @@ for layer, (W,b) in zip(net.layers, best_weights):
     layer.b = b
 
 
-#               --- Evaluate on test set ---
+#               --- Evaluate on test set (once, at the end) ---
 test_loss = 0.0
 predictions = []
 
@@ -125,33 +131,20 @@ for i in range(len(X_test_norm)):
 test_loss /= len(X_test_norm)
 print(f"\nFinal Test Loss (normalized scale): {test_loss:.6f}")
 
-# --- Baseline comparison: naive "tomorrow = today" predictor ---
-naive_prediction = X_test_norm[:, 2]                   # Volatility_lag1 IS our naive guess for today's volatility
+# --- Baseline comparison: naive persistence predictor ---
+# predict today's volatility = yesterday's volatility, in the SAME MinMax scale as y
+naive_prediction = (X_test[:, 2] - y_min) / (y_max - y_min)
 naive_loss = np.mean((naive_prediction - y_test_norm)**2)
-print(f"Naive Baseline Loss (predict using yesterday's volatility): {naive_loss:.6f}")
+print(f"Naive Baseline Loss (persistence, same scale): {naive_loss:.6f}")
 
 
-
-# --- Sanity check against sklearn's MLPRegressor ---
-
-
-sklearn_model = MLPRegressor(
-    hidden_layer_sizes = (8,),
-    activation = 'relu',
-    max_iter = 1000,
-    random_state = 42  
-)
-
-sklearn_model.fit(X_train_norm, y_train_norm)
-sklearn_preds = sklearn_model.predict(X_test_norm)
-sklearn_test_loss = np.mean((sklearn_preds - y_test_norm) ** 2)
-
-
-
-print(f"\n---- Comparision ----")
-print(f"Your from - scratch NN Test Loss :   {test_loss:.6f}")
-print(f"sklearn MLPRegressor Test Loss :     {sklearn_test_loss:.6f}")
-print(f"Naive Baseline Test Loss :           {naive_loss:.6f}")
+print(f"\n---- Comparison ----")
+print(f"From-scratch NN Test Loss :   {test_loss:.6f}")
+print(f"Naive Baseline Test Loss :    {naive_loss:.6f}")
+if naive_loss < test_loss:
+    print(f"Persistence baseline beats the network.")
+else:
+    print(f"Network beats the persistence baseline.")
 
 
         
