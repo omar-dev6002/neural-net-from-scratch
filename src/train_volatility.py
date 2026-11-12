@@ -50,70 +50,60 @@ print(f"y_train_norm mean/std:{y_train_norm.mean():.4f}, {y_train_norm.std():.4f
 
 
 
-# --- Build and train the network ---
-np.random.seed(42)
+def train_sgd(X_tr, y_tr, X_va, y_va, epochs=200, lr=0.01, l2_lambda=0.0, patience=30, log_every=None):
+    np.random.seed(42)
+    net = NeuralNetwork(layer_sizes=[4, 8, 1], activations=[leaky_relu, sigmoid])
+    best_val_loss = float('inf')
+    best_weights = None
+    epochs_without_improvement = 0
+    n_samples = len(X_tr)
+
+    for epoch in range(epochs):
+        total_loss = 0.0
+        indices = np.random.permutation(n_samples)
+        for i in indices:
+            y_true = np.array([y_tr[i]])
+            y_pred = net.forward(X_tr[i])
+            total_loss += mse(y_pred, y_true)
+            net.backward(y_true, lr, l2_lambda=l2_lambda)
+
+        avg_loss = total_loss / n_samples
+        val_loss = np.mean([
+            mse(net.forward(X_va[i]), np.array([y_va[i]]))
+            for i in range(len(X_va))
+        ])
+
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_weights = [(layer.W.copy(), layer.b.copy()) for layer in net.layers]
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+
+        if log_every and epoch % log_every == 0:
+            print(f"Epoch : {epoch}, Train Loss: {avg_loss:.6f}, Val Loss: {val_loss:.6f} (best: {best_val_loss:.6f})")
+
+        if epochs_without_improvement >= patience:
+            if log_every:
+                print(f"\n early stopping at epoch {epoch} - no improvement for {patience} epochs")
+            break
+
+    for layer, (W, b) in zip(net.layers, best_weights):
+        layer.W = W
+        layer.b = b
+    return net
 
 
-net = NeuralNetwork(layer_sizes = [4, 8, 1], activations =[leaky_relu, sigmoid])
-# 4 inputs -> 8 hidden neurons (leaky_ReLU) -> 1 output (sigmoid, since i will rescale later)
-
-
-epochs = 200    # the number of times the entire training dataset is passed through the network
+# --- Train direct model with early stopping on VALIDATION loss ---
+epochs = 200
 learning_rate = 0.01
-l2_lambda = 0.0      # L2 regularization strength — small penalty on large weights
-
-n_samples = len(X_train_norm)
-
-
-# --- Train with early stopping on VALIDATION loss (keep best weights) ---
-
-best_val_loss = float('inf')
-best_weights = None
+l2_lambda = 0.0
 patience = 30
-epochs_without_improvement = 0
 
-for epoch in range(epochs):
-    total_loss = 0
-    indices = np.random.permutation(n_samples)
-    X_shuffled = X_train_norm[indices]
-    y_shuffled = y_train_norm[indices]
-
-
-    for i in range(n_samples):
-        x = X_shuffled[i]
-        y_true = np.array([y_shuffled[i]])
-        y_pred = net.forward(x)
-        total_loss += mse(y_pred, y_true)
-        net.backward(y_true, learning_rate, l2_lambda= l2_lambda)
-
-    avg_loss = total_loss / n_samples
-
-    # compute validation loss for early stopping
-    val_loss = 0.0
-    for i in range(len(X_val_norm)):
-        y_pred = net.forward(X_val_norm[i])
-        val_loss += mse(y_pred, np.array([y_val_norm[i]]))
-    val_loss /= len(X_val_norm)
-
-    if val_loss < best_val_loss:
-        best_val_loss = val_loss
-        best_weights = [(layer.W.copy(), layer.b.copy()) for layer in net.layers]
-        epochs_without_improvement = 0
-    else:
-        epochs_without_improvement += 1
-
-    if epoch % 20 == 0:
-        print(f"Epoch : {epoch}, Train Loss: {avg_loss:.6f}, Val Loss: {val_loss:.6f} (best: {best_val_loss:.6f})")
-
-    if epochs_without_improvement >= patience:
-        print(f"\n early stopping at epoch {epoch} - no improvement for {patience} epochs")
-        break
-
-
-#       --- Restore best weights before evaluating ---
-for layer, (W,b) in zip(net.layers, best_weights):
-    layer.W = W
-    layer.b = b
+net = train_sgd(
+    X_train_norm, y_train_norm, X_val_norm, y_val_norm,
+    epochs=epochs, lr=learning_rate, l2_lambda=l2_lambda, patience=patience, log_every=20
+)
 
 
 #               --- Evaluate on test set (once, at the end) ---
@@ -145,6 +135,42 @@ if naive_loss < test_loss:
     print(f"Persistence baseline beats the network.")
 else:
     print(f"Network beats the persistence baseline.")
+
+
+# --- Follow-up 1: predict change in volatility (y_t - Volatility_lag1) ---
+dy_train = y_train - X_train[:, 2]
+dy_val = y_val - X_val[:, 2]
+dy_min, dy_max = dy_train.min(), dy_train.max()
+dy_train_norm = (dy_train - dy_min) / (dy_max - dy_min)
+dy_val_norm = (dy_val - dy_min) / (dy_max - dy_min)
+
+net_res = train_sgd(
+    X_train_norm, dy_train_norm, X_val_norm, dy_val_norm,
+    epochs=epochs, lr=learning_rate, l2_lambda=l2_lambda, patience=patience
+)
+dy_preds_norm = np.array([float(net_res.forward(X_test_norm[i])[0]) for i in range(len(X_test_norm))])
+dy_preds = dy_preds_norm * (dy_max - dy_min) + dy_min
+res_preds_norm = ((X_test[:, 2] + dy_preds) - y_min) / (y_max - y_min)
+res_test_loss = np.mean((res_preds_norm - y_test_norm) ** 2)
+print(f"Residual NN (y_t - y_{{t-1}}) Test Loss : {res_test_loss:.6f}")
+
+
+# --- Follow-up 2: predict log-volatility ---
+ly_train = np.log(y_train)
+ly_val = np.log(y_val)
+ly_min, ly_max = ly_train.min(), ly_train.max()
+ly_train_norm = (ly_train - ly_min) / (ly_max - ly_min)
+ly_val_norm = (ly_val - ly_min) / (ly_max - ly_min)
+
+net_log = train_sgd(
+    X_train_norm, ly_train_norm, X_val_norm, ly_val_norm,
+    epochs=epochs, lr=learning_rate, l2_lambda=l2_lambda, patience=patience
+)
+ly_preds_norm = np.array([float(net_log.forward(X_test_norm[i])[0]) for i in range(len(X_test_norm))])
+ly_preds = ly_preds_norm * (ly_max - ly_min) + ly_min
+log_preds_norm = (np.exp(ly_preds) - y_min) / (y_max - y_min)
+log_test_loss = np.mean((log_preds_norm - y_test_norm) ** 2)
+print(f"Log-volatility NN Test Loss :           {log_test_loss:.6f}")
 
 
         
