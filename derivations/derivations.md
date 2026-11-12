@@ -64,13 +64,12 @@ dL/db1 = δ1
 ![Day 5 derivation](day5_p3.jpg)
 
 Momentum update rule — blends the current gradient with a running
-"velocity" term to smooth updates and speed up convergence through flat
-regions of the loss surface:
+"velocity" term to smooth updates across iterations:
 
 velocity = β · velocity + (1 - β) · gradient
 W = W - learning_rate · velocity
 
-> **Note on momentum (2026-11-12):** The original observation that momentum speeds up XOR convergence was based on a single seed. Testing over 10 seeds with the real mini-batch implementation (`batch_size = 2`, 10,000 epochs) shows that both `beta = 0.9` (mean loss `0.0010 ± 0.0001`) and `beta = 0.0` (mean loss `0.0004 ± 0.0001`) converge 10/10 on the 4-sample XOR problem; momentum smoothed intermediate loss trajectories but was not required for convergence.
+> **Correction on momentum (2026-11-12):** I originally claimed that momentum provided faster convergence on XOR. A 10-seed verification did not reproduce a benefit for momentum: measuring final loss at epoch 10,000 with real mini-batch updates (`batch_size = 2`, learning rate 0.1), `beta = 0.0` reached a final loss of `0.0004 ± 0.0001` versus `0.0010 ± 0.0001` for `beta = 0.9`. Both settings converged (all 10 seeds reached loss < 0.005), but momentum did not improve final loss or convergence speed.
 
 
 ## Day 6: Data pipeline — returns, realized volatility, feature engineering
@@ -195,6 +194,8 @@ time) would be trying Leaky ReLU or reinitializing weights to test
 whether the dying-neuron problem — rather than the feature itself — was
 the actual cause of the regression.
 
+> **Correction (2026-11-12):** I originally believed this flat prediction and regression (`0.001255`) was caused by dying ReLU neurons. Re-testing showed the real cause was a bug in `network.py`, which applied `a * (1 - a)` to hidden ReLU outputs. When analytical derivatives are properly routed (`relu_derivative`), plain ReLU does not produce flat calm-period predictions and achieves `0.000239 ± 0.000008` (10 seeds) on 4 features — identical to Leaky ReLU. The neurons were not dying; the backpropagation gradient was wrong.
+
 
 ## Day 10: L2 regularization — implemented, tested, found limited benefit
 
@@ -226,6 +227,8 @@ learn) both produce visually similar flat-line symptoms, but for
 different underlying reasons. Diagnosing *why* a model outputs a flat
 prediction requires examining the actual mechanism, not just observing
 the symptom.
+
+> **Correction (2026-11-12):** As noted above, Day 9's flat prediction was caused by the pre-Day-11 derivative routing bug in `network.py`, not by dead neurons.
 
 
 
@@ -273,7 +276,9 @@ architecture `[4, 8, 1]` with `[leaky_relu, sigmoid]` activations.
 >   - 3 features, Leaky ReLU: `0.000316 ± 0.000053`
 >   - 3 features, ReLU: `0.000315 ± 0.000053`
 > - Leaky ReLU provides no improvement over plain ReLU; the two activations perform identically within seed variation. The real fix on Day 11 was routing each layer's activation to its correct analytical derivative function instead of hardcoding `sigmoid_derivative`.
-> - However, comparing 4 features against 3 features (both using the corrected derivative) shows a clear improvement of `0.000076` (from `0.000315` to `0.000239`), which is larger than the seed-to-seed standard deviation (`0.000008` for 4 features, `0.000053` for 3 features). Adding `Volatility_ma10_lag1` did help, but its benefit had been masked by the derivative bug.
+> - The claimed **~4.4x improvement** compared Day 11's `0.000177` against Day 7's `0.000777`. On the corrected network over 10 seeds, 4 features improves over 3 features from `0.000315` to `0.000239` (a ~1.3x reduction in MSE, not 4.4x), and Leaky ReLU provides no advantage over ReLU (`0.000239` vs `0.000239`).
+> - The claim of being **~1950x better than the naive baseline** was an artifact of computing the baseline by subtracting Min-Max scaled target from Z-scored input (`0.346384` vs `0.000177`). When persistence (`y_t = y_{t-1}`) is evaluated in the same Min-Max scale as the target, it achieves `0.000089`, which outperforms the direct network (`0.000239 ± 0.000008`). The network was never 1950x better than baseline; persistence beats the direct network.
+> - Adding `Volatility_ma10_lag1` did provide a genuine improvement of `0.000076` (from `0.000315` to `0.000239`), larger than the seed spread (`0.000008` / `0.000053`), but its benefit had been masked on Day 9 by the derivative bug.
 
 ## Post-Review Corrections (2026-11-12)
 
@@ -283,7 +288,7 @@ After a technical review of the repository, I fixed several methodological and i
 2. **Validation split for early stopping:** `src/train_volatility.py` previously checkpointed weights using training loss. I changed the chronological split to 70/10/20 (`1285` train / `184` validation / `368` test), fit normalization stats on train only, and early-stop on validation loss.
 3. **Naive baseline scale bug & multi-seed results:** The old naive baseline (`0.346384`) compared Z-scored `Volatility_lag1` against Min-Max scaled `Volatility`. When `Volatility_lag1` is scaled to the same Min-Max range as the target, the persistence baseline (`y_t = y_{t-1}`) scores `0.000089` (deterministic, `± 0.000000`) on the 70/10/20 test split, beating the direct `[4, 8, 1]` network (`0.000239 ± 0.000008`). Because 21-day rolling volatility shares 20 of 21 daily returns with the previous day, persistence is a very strong baseline.
 4. **Modelling follow-ups (same 70/10/20 split and original Min-Max scale, 10 seeds):**
-   - **Residual model:** Predicts daily volatility change `y_t - y_{t-1}` (normalized to `[0, 1]` using training min/max, output activation `sigmoid`). At test time, predictions are un-scaled, added to yesterday's volatility, and mapped to the target's Min-Max scale. Test MSE: **`0.000088 ± 0.000001`** (essentially matching persistence `0.000089` with a ~1% edge).
+   - **Residual model:** Predicts daily volatility change `dy = y_t - y_{t-1}` (normalized to `[0, 1]` using training min/max, output activation `sigmoid`). At test time, predictions are un-scaled, added to yesterday's volatility, and mapped to the target's Min-Max scale. Test MSE: `0.000088 ± 0.000001`. In practice, this is statistically indistinguishable from persistence (`0.000089 ± 0.000000`) given that the network inputs include lagged volatility, evaluation is on a single chronological split, and the residual idea was chosen post hoc after seeing test set performance.
    - **Log-volatility model:** Predicts `log(y)` (normalized to `[0, 1]`, output activation `sigmoid`). Predictions are un-scaled, exponentiated with `exp()`, and mapped to the target's Min-Max scale. Test MSE: **`0.000132 ± 0.000001`** (better than direct level prediction, still worse than persistence).
-   - **sklearn MLPRegressor baseline:** Architecture `(8,)`, ReLU, Adam defaults, 10 seeds: **`0.005392 ± 0.003212`** (higher error due to default learning rate, batch size 200, unbounded output, and no validation early stopping).
+   - **sklearn MLPRegressor baseline:** Architecture `(8,)`, ReLU, Adam defaults, 10 seeds: **`0.005392 ± 0.003212`** (higher error and large seed spread likely reflect default settings: learning rate 0.001, batch size 200, unbounded output, and no validation early stopping).
 5. **Mini-batch GD and gradient checks:** Added 2D batched forward/backward support to `Dense` (keeping 1D per-sample SGD as default), updated `src/train_xor_batched.py` to update once per batch, and added `tests/gradient_check.py` (central differences, `eps = 1e-7`, passing within `1.63e-10` across all activations in both SGD and mini-batch modes).

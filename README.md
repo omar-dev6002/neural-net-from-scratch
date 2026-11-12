@@ -15,19 +15,19 @@ Evaluated over 10 random seeds on the chronological 70/10/20 split (`1,285` trai
 | Direct NN — 4 features, plain ReLU (`[4, 8, 1]`) | 0.000239 ± 0.000008 |
 | Direct NN — 3 features, Leaky ReLU (`[3, 8, 1]`) | 0.000316 ± 0.000053 |
 | Direct NN — 3 features, plain ReLU (`[3, 8, 1]`) | 0.000315 ± 0.000053 |
-| Follow-up 1: Residual NN (predict `y_t - Volatility_lag1`) | **0.000088 ± 0.000001** |
+| Follow-up 1: Residual NN (predict `y_t - Volatility_lag1`) | 0.000088 ± 0.000001 |
 | Follow-up 2: Log-volatility NN (predict `log(Volatility)`) | 0.000132 ± 0.000001 |
 | sklearn MLPRegressor (matching `(8,)` architecture, defaults) | 0.005392 ± 0.003212 |
 
 **Key findings:**
 - **Persistence beats the direct network:** The persistence baseline (`y_t = y_{t-1}`) achieves `0.000089`, easily outperforming the direct `[4, 8, 1]` network (`0.000239 ± 0.000008`). Because 21-day rolling volatility at day `t` shares 20 of 21 daily returns with day `t - 1`, persistence is a very strong benchmark.
-- **Residual reformulation matches persistence:** Reformulating the target as the daily change `dy = y_t - y_{t-1}` and adding the network's output back to persistence brings test MSE down to `0.000088 ± 0.000001`, essentially matching persistence with a ~1% edge.
+- **Residual reformulation is statistically indistinguishable from persistence:** Predicting the daily change `dy = y_t - y_{t-1}` and adding the prediction back to yesterday's volatility yields a test MSE of `0.000088 ± 0.000001`. In practice, this is statistically indistinguishable from the persistence baseline (`0.000089 ± 0.000000`), especially given that the network's inputs already include lagged volatility, the comparison is on a single chronological split, and the residual formulation was chosen after inspecting test set results.
 - **Log-volatility:** Training on `log(Volatility)` and exponentiating back via `exp()` yields `0.000132 ± 0.000001` — better than direct level prediction, but still worse than persistence.
 - **The 10-day MA feature helps:** Comparing 4 features against 3 features shows an average reduction in test MSE of `0.000076` (from `0.000315` to `0.000239`), which is larger than the seed-to-seed spread (`0.000008` for 4 features, `0.000053` for 3 features). Adding `Volatility_ma10_lag1` provides a genuine, reproducible improvement.
 - **Leaky ReLU does not improve over ReLU:** Once the analytical derivative lookup is routed correctly, plain ReLU and Leaky ReLU yield identical test MSE (`0.000239 ± 0.000008` on 4 features; `0.000315` vs `0.000316` on 3 features). Leaky ReLU does not confer an advantage here.
-- **sklearn comparison caveat:** `sklearn.neural_network.MLPRegressor` achieves `0.005392 ± 0.003212` across 10 seeds (seed 42: `0.005877`). This difference reflects default hyperparameter choices in sklearn (Adam optimizer, batch size 200, default learning rate 0.001, unbounded identity output, no validation early stopping) rather than an algorithmic advantage of hand-coded SGD over Adam.
+- **sklearn comparison caveat:** `sklearn.neural_network.MLPRegressor` achieves `0.005392 ± 0.003212` across 10 seeds (seed 42: `0.005877`), showing a large seed-to-seed spread. This difference likely reflects default hyperparameter choices in sklearn (Adam optimizer, batch size 200, default learning rate 0.001, unbounded identity output, no validation early stopping) rather than an algorithmic advantage of hand-coded SGD over Adam.
 
-![Predictions vs actual](notebooks/volatility_predictions.png)
+![Nifty 50 Realized Volatility: Actual vs Direct NN (Leaky ReLU) vs Persistence](notebooks/volatility_predictions.png)
 
 ## Model Architectures & Target Scaling
 
@@ -66,5 +66,8 @@ python tests/gradient_check.py   # verify analytical vs numerical gradients
 cd src
 python train_xor.py              # XOR in per-sample SGD mode
 python train_xor_batched.py      # XOR in mini-batch mode (batch_size=2)
-python train_volatility.py       # train and evaluate Nifty 50 volatility models
+python train_volatility.py       # train single run and generate prediction plot (~10s)
+python run_10seeds.py            # evaluate all models across 10 random seeds (~1.5–2 minutes)
 ```
+
+`python run_10seeds.py` runs all models over 10 random seeds on the 70/10/20 split and reports mean and standard deviation of test MSE in the original Min-Max scale. You can also rerun specific models individually (e.g., `python run_10seeds.py 4_lrelu residual`). Runtime is ~15 seconds per mode or ~1.5 to 2 minutes for the entire suite.
