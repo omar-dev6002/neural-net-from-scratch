@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 
 # --- Load the processed dataset ---
 data = pd.read_csv("../data/nifty50_model_data.csv", index_col = 0)
-data = data.dropna()   # remove leftover header artifact rows from the MultiIndex CSV export
 
 features = ['Return_lag1', 'Return_lag2', 'Volatility_lag1', 'Volatility_ma10_lag1']
 

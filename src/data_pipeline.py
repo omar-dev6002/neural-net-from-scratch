@@ -15,6 +15,7 @@ print(data.head())
 print(f"\nTotal rows: {len(data)}")
 
 # Save raw data
+data.columns = data.columns.get_level_values(0)
 data.to_csv("../data/nifty50_raw.csv")
 
 print("\nSaved to data/nifty50_raw.csv")
