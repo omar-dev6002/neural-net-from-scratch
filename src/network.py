@@ -61,6 +61,9 @@ class NeuralNetwork:
             output_derivative = DERIVATIVES[output_activation]
             
             # start the chain: error at the output layer, using z (not a!)
+            # uses (y_pred - y_true) not 2*(y_pred - y_true) — so the effective
+            # loss being minimized is 0.5 * (y_pred - y_true)^2, which halves the
+            # gradient relative to plain MSE. the learning rate absorbs the difference.
             delta = (y_pred - y_true) * output_derivative(self.z_values[-1])
 
             # walk backward through layers
