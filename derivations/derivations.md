@@ -262,3 +262,21 @@ best model**, and ~1950x better than the naive baseline.
 This is now the final model configuration: 4 features
 (`Return_lag1`, `Return_lag2`, `Volatility_lag1`, `Volatility_ma10_lag1`),
 architecture `[4, 8, 1]` with `[leaky_relu, sigmoid]` activations.
+
+> **Correction (2026-11-12):** Looking back at Day 9 through Day 11 after a code review, I misdiagnosed what caused the Day 9 regression (`0.001255`). I originally believed that adding `Volatility_ma10_lag1` caused ReLU neurons to die, and that switching to Leaky ReLU fixed dying ReLU. When I re-tested this in a scratch script on the same 80/20 split, the evidence showed something else:
+> - Restoring the pre-Day-11 bug in `network.py` that applied `a * (1 - a)` to ReLU hidden outputs reproduced `0.001255` (`pred_std = 0.0374`) exactly.
+> - With the Day 11 `DERIVATIVES` lookup fix in place, plain `relu` and `leaky_relu` achieve virtually the same test MSE (`0.000177` vs `0.000177` on the 80/20 split; `0.000236` vs `0.000235` on the 70/10/20 split).
+>
+> So the real cause of the Day 9 regression was using the wrong derivative formula (`a * (1 - a)`) for ReLU hidden layers in `network.py`, not dying ReLU. Fixing the derivative lookup on Day 11 is what fixed the model.
+
+## Post-Review Corrections (2026-11-12)
+
+After a technical review of the repository, I fixed several methodological and implementation bugs and re-ran all experiments:
+
+1. **Loss convention (`0.5 * squared error`):** `NeuralNetwork.backward()` starts from `(y_pred - y_true) * output_derivative(z)`, omitting the factor of `2` from `mse_derivative`. That means the network minimizes `0.5 * (y_pred - y_true)^2`, which halves the effective learning rate. I kept this behavior and documented it in `src/network.py` rather than re-tuning hyperparameters.
+2. **Validation split for early stopping:** `src/train_volatility.py` previously checkpointed weights using training loss. I changed the chronological split to 70/10/20 (`1285` train / `184` validation / `368` test), fit normalization stats on train only, and early-stop on validation loss.
+3. **Naive baseline scale bug:** The old naive baseline (`0.346384`) compared Z-scored `Volatility_lag1` against Min-Max scaled `Volatility`. When `Volatility_lag1` is scaled to the same Min-Max range as the target, the persistence baseline (`y_t = y_{t-1}`) scores `0.000089` on the 70/10/20 test split, beating the direct `[4, 8, 1]` network (`0.000235`). Because 21-day rolling volatility shares 20 of 21 daily returns with the previous day, persistence is a strong baseline.
+4. **Modelling follow-ups (same 70/10/20 split and Min-Max scale):**
+   - Predicting the residual (`y_t - Volatility_lag1`) and adding it back to persistence: **`0.000087`** (essentially matching persistence `0.000089` with a ~2% edge).
+   - Predicting `log(Volatility)` and exponentiating back: **`0.000130`** (better than direct level prediction `0.000235`, still worse than persistence `0.000089`).
+5. **Mini-batch GD and gradient checks:** Added 2D batched forward/backward support to `Dense` (keeping 1D per-sample SGD as default), updated `src/train_xor_batched.py` to update once per batch, and added `tests/gradient_check.py` (central differences, `eps = 1e-7`, passing within `1.63e-10` across all activations in both SGD and mini-batch modes).
