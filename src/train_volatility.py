@@ -138,6 +138,13 @@ else:
 
 
 # --- Follow-up 1: predict change in volatility (y_t - Volatility_lag1) ---
+# Target scaling: raw change dy = y_t - y_{t-1} can be negative, so we Min-Max
+# normalize dy to [0, 1] using training statistics: (dy - dy_min) / (dy_max - dy_min).
+# Output activation: sigmoid (outputs in [0, 1], matching the normalized change range).
+# Evaluation: predicted change is un-scaled back to raw scale via
+# dy_pred = dy_norm * (dy_max - dy_min) + dy_min, added to yesterday's raw volatility
+# X_test[:, 2], and then mapped to the target's Min-Max scale ((pred - y_min) / (y_max - y_min))
+# so the MSE is directly comparable to the baseline and direct models.
 dy_train = y_train - X_train[:, 2]
 dy_val = y_val - X_val[:, 2]
 dy_min, dy_max = dy_train.min(), dy_train.max()
@@ -156,6 +163,12 @@ print(f"Residual NN (y_t - y_{{t-1}}) Test Loss : {res_test_loss:.6f}")
 
 
 # --- Follow-up 2: predict log-volatility ---
+# Target scaling: log(y) is Min-Max normalized to [0, 1] using training stats:
+# (log_y - ly_min) / (ly_max - ly_min).
+# Output activation: sigmoid (outputs in [0, 1], matching the normalized log range).
+# Evaluation: predicted log-vol is un-scaled via ly_norm * (ly_max - ly_min) + ly_min,
+# exponentiated back via np.exp() to raw volatility, and then scaled to the target's
+# Min-Max scale ((pred - y_min) / (y_max - y_min)) so MSE is in the original target scale.
 ly_train = np.log(y_train)
 ly_val = np.log(y_val)
 ly_min, ly_max = ly_train.min(), ly_train.max()
