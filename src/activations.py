@@ -7,6 +7,7 @@ def relu(z):
     return  np.maximum(0, z)
 
 def relu_derivative(z):
+    # z=0 maps to 0 by subgradient convention
     return np.where(z > 0, 1, 0)
 
 def softmax(z):
@@ -21,5 +22,6 @@ def leaky_relu(z, alpha = 0.01):
     return np.where(z > 0, z, alpha * z)
 
 def leaky_relu_derivative(z, alpha = 0.01 ):
+    # z=0 maps to alpha by subgradient convention
     return np.where(z > 0, 1, alpha)
 
