@@ -13,7 +13,7 @@ Y = np.array([0,1,1,0])
 
 net = NeuralNetwork(layer_sizes= [ 2, 4, 1], activations = [sigmoid, sigmoid])
 
-epochs = 3000
+epochs = 10000
 
 learning_rate = 1.0
 
@@ -32,15 +32,13 @@ for epoch in range(epochs):
     for start in range (0, len(X), batch_size):
         end = start + batch_size
         X_batch = X_shuffled[start:end]
-        Y_batch = Y_shuffled[start:end]
+        Y_batch = Y_shuffled[start:end].reshape(-1, 1)
 
+        y_pred = net.forward(X_batch)                    # Batched forward pass
+        total_loss += np.sum((y_pred - Y_batch) ** 2)    # Accumulate loss
+        net.backward(Y_batch, learning_rate)             # One weight update per batch
 
-        for x, y in zip(X_batch, Y_batch):
-            y_pred = net.forward(x)                      # Forward pass
-            total_loss += (y_pred[0] - y) ** 2           # Accumulate loss
-            net.backward(np.array([y]), learning_rate)   # backward pass (now uses momentum)
-
-    if epoch % 300 == 0:
+    if epoch % 1000 == 0:
         print(f"Epoch {epoch}, Loss: {total_loss / 4:.4f}")
 
 print("\nfinal predictions: ")

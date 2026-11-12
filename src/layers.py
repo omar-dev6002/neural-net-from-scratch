@@ -16,10 +16,13 @@ class Dense:
         self.vb = np.zeros_like(self.b) 
         
 
-    def forward(self,x):
+    def forward(self, x):
 
         self.x = x
-        self.z = np.dot(self.W,x) + self.b
+        if x.ndim == 1:
+            self.z = np.dot(self.W, x) + self.b
+        else:
+            self.z = x @ self.W.T + self.b
         return self.z
 
     
@@ -30,10 +33,15 @@ class Dense:
         l2_lambda: L2 regularization strength (0.0 = no regularization)
         Returns: dL/dx, the error to pass to the PREVIOUS layer
         '''
-        
-        dW = np.outer(delta, self.x)      # dL/dW = delta · x^T
-        db = delta                        # dL/db = delta
-        dx = np.dot(self.W.T, delta)       # dL/dx = W^T · delta, passed backward
+        if delta.ndim == 1:
+            dW = np.outer(delta, self.x)      # dL/dW = delta · x^T
+            db = delta                        # dL/db = delta
+            dx = np.dot(self.W.T, delta)      # dL/dx = W^T · delta, passed backward
+        else:
+            batch_size = delta.shape[0]
+            dW = (delta.T @ self.x) / batch_size
+            db = np.mean(delta, axis=0)
+            dx = delta @ self.W
 
 
         # L2 regularization: add penalty gradient (2 * lambda * W) to discourage large weights

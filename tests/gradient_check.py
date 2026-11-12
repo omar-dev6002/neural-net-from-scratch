@@ -19,42 +19,49 @@ def numerical_gradient_network(net, x, y_true, param_layer_idx, param_name, para
     layer = net.layers[param_layer_idx]
     param = getattr(layer, param_name)
 
+    def loss_fn(y_pred):
+        if x.ndim == 1:
+            return 0.5 * np.sum((y_pred - y_true) ** 2)
+        else:
+            return 0.5 * np.sum((y_pred - y_true) ** 2) / x.shape[0]
+
     if param_j is not None:
         old_val = param[param_i, param_j]
         param[param_i, param_j] = old_val + eps
-        y_plus = net.forward(x.copy())
-        loss_plus = 0.5 * np.sum((y_plus - y_true) ** 2)
+        loss_plus = loss_fn(net.forward(x.copy()))
 
         param[param_i, param_j] = old_val - eps
-        y_minus = net.forward(x.copy())
-        loss_minus = 0.5 * np.sum((y_minus - y_true) ** 2)
+        loss_minus = loss_fn(net.forward(x.copy()))
 
         param[param_i, param_j] = old_val
     else:
         old_val = param[param_i]
         param[param_i] = old_val + eps
-        y_plus = net.forward(x.copy())
-        loss_plus = 0.5 * np.sum((y_plus - y_true) ** 2)
+        loss_plus = loss_fn(net.forward(x.copy()))
 
         param[param_i] = old_val - eps
-        y_minus = net.forward(x.copy())
-        loss_minus = 0.5 * np.sum((y_minus - y_true) ** 2)
+        loss_minus = loss_fn(net.forward(x.copy()))
 
         param[param_i] = old_val
 
     return (loss_plus - loss_minus) / (2 * eps)
 
 
-def check_gradients(activations_list, label, n_checks=5, eps=1e-7):
+def check_gradients(activations_list, label, batch_size=None, n_checks=5, eps=1e-7):
     """
     Build a small network, do one forward+backward, then compare analytical
     gradients against central differences for a random subset of parameters.
-    Returns the max absolute difference found.
+    If batch_size is None, tests 1D per-sample SGD path; otherwise tests 2D mini-batch path.
+    Returns True if all checks pass.
     """
     np.random.seed(42)
     net = NeuralNetwork(layer_sizes=[3, 4, 1], activations=activations_list)
-    x = np.random.randn(3)
-    y_true = np.array([np.random.rand()])
+    if batch_size is None:
+        x = np.random.randn(3)
+        y_true = np.array([np.random.rand()])
+    else:
+        x = np.random.randn(batch_size, 3)
+        y_true = np.random.rand(batch_size, 1)
 
     # forward + backward to get analytical gradients
     # backward uses (y_pred - y_true) * act'(z), which is the gradient of 0.5*(y-ytrue)^2
@@ -148,9 +155,14 @@ def main():
     all_pass = True
 
     print("--- Gradient checks (per-sample, SGD mode) ---")
-    all_pass &= check_gradients([sigmoid, sigmoid], "sigmoid + sigmoid")
-    all_pass &= check_gradients([relu, sigmoid], "relu + sigmoid")
-    all_pass &= check_gradients([leaky_relu, sigmoid], "leaky_relu + sigmoid")
+    all_pass &= check_gradients([sigmoid, sigmoid], "sigmoid + sigmoid (SGD)")
+    all_pass &= check_gradients([relu, sigmoid], "relu + sigmoid (SGD)")
+    all_pass &= check_gradients([leaky_relu, sigmoid], "leaky_relu + sigmoid (SGD)")
+
+    print("\n--- Gradient checks (mini-batch mode, batch_size=4) ---")
+    all_pass &= check_gradients([sigmoid, sigmoid], "sigmoid + sigmoid (batch=4)", batch_size=4)
+    all_pass &= check_gradients([relu, sigmoid], "relu + sigmoid (batch=4)", batch_size=4)
+    all_pass &= check_gradients([leaky_relu, sigmoid], "leaky_relu + sigmoid (batch=4)", batch_size=4)
 
     print()
     if all_pass:
