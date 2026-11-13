@@ -53,7 +53,7 @@ After a technical review of this repository, I audited every claim and corrected
 
 ## Project structure
 
-- `src/` — neural network implementation (`layers.py`, `network.py`, `activations.py`, `losses.py`), data pipeline (`data_pipeline.py`), and training scripts (`train_xor.py`, `train_xor_batched.py`, `train_volatility.py`)
+- `src/` — neural network implementation (`layers.py`, `network.py`, `activations.py`, `losses.py`), data pipeline (`data_pipeline.py`), and training scripts (`train_xor.py`, `train_xor_batched.py`, `train_volatility.py`, `run_10seeds.py`)
 - `tests/` — finite-difference gradient check (`gradient_check.py`) for `sigmoid`, `relu`, and `leaky_relu` in both SGD and mini-batch modes
 - `data/` — raw, processed, and model-ready Nifty 50 CSVs
 - `derivations/` — hand-derived math notes and photographed derivations (`derivations.md`, `day1_p1.jpg`–`day11_p2.jpeg`)
@@ -66,8 +66,12 @@ python tests/gradient_check.py   # verify analytical vs numerical gradients
 cd src
 python train_xor.py              # XOR in per-sample SGD mode
 python train_xor_batched.py      # XOR in mini-batch mode (batch_size=2)
-python train_volatility.py       # train single run and generate prediction plot (~10s)
-python run_10seeds.py            # evaluate all models across 10 random seeds (~1.5–2 minutes)
+python train_volatility.py       # train a single run and generate the prediction plot
+python run_10seeds.py            # evaluate all models across 10 random seeds
 ```
 
-`python run_10seeds.py` runs all models over 10 random seeds on the 70/10/20 split and reports mean and standard deviation of test MSE in the original Min-Max scale. You can also rerun specific models individually (e.g., `python run_10seeds.py 4_lrelu residual`). Runtime is ~15 seconds per mode or ~1.5 to 2 minutes for the entire suite.
+`run_10seeds.py` defaults to running all six modes (`4_lrelu`, `4_relu`, `3_lrelu`, `3_relu`, `residual`, `logvol`) sequentially, which takes roughly 20–30 minutes on a single core. You can rerun specific models individually and finish in under a minute, e.g.:
+
+```bash
+python run_10seeds.py 4_lrelu residual
+```
