@@ -70,7 +70,7 @@ python train_volatility.py       # train a single run and generate the predictio
 python run_10seeds.py            # evaluate all models across 10 random seeds
 ```
 
-`run_10seeds.py` defaults to running all six modes (`4_lrelu`, `4_relu`, `3_lrelu`, `3_relu`, `residual`, `logvol`) sequentially, which takes roughly 20–30 minutes on a single core. You can rerun specific models individually and finish in under a minute, e.g.:
+`run_10seeds.py` defaults to running all six modes (`4_lrelu`, `4_relu`, `3_lrelu`, `3_relu`, `residual`, `logvol`) sequentially, which takes roughly an hour on a single core (measured: ~64 minutes).
 
 ```bash
 python run_10seeds.py 4_lrelu residual
